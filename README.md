@@ -4,16 +4,15 @@
 
 ## Installation
 
-Requirments:
+This is a port of COEX MAVLink serial to UDP bridge for LicheeRV Nano.
 
-- `libcyaml`
 
-```console
+```bash
+export COMPILER=<CROSS_COMPILERS_DIR>/gcc/riscv64-linux-musl-x86_64/bin
 mkdir build
 cd build
-cmake -DCMAKE_BUILD_TYPE=Release ..
+cmake -DCMAKE_TOOLCHAIN_FILE=./toolchains/riscv64.toolchain.cmake
 make
-sudo make install
 ```
 
 ## Configuration

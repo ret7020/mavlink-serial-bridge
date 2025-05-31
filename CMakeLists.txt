@@ -39,15 +39,26 @@ configure_file(
 
 find_package(PkgConfig REQUIRED)
 
-pkg_check_modules(YAML REQUIRED libcyaml)
+# pkg_check_modules(YAML REQUIRED libcyaml)
+file(GLOB LIBCYAML_SOURCES
+    lib/libcyaml/src/*.c
+)
+include_directories(lib/libcyaml/include)
 
-add_executable(mavlink-serial-bridge main.c config.c ${PROJECT_SOURCE_DIR}/lib/c-ringbuf/ringbuf.c)
+add_subdirectory(lib/libyaml)
+include_directories(lib/libyaml/include)
+
+add_executable(mavlink-serial-bridge main.c config.c ${PROJECT_SOURCE_DIR}/lib/c-ringbuf/ringbuf.c ${LIBCYAML_SOURCES})
+target_link_libraries(mavlink-serial-bridge yaml)
 
 set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=address,undefined,leak")
 set(CMAKE_LINKER_FLAGS_DEBUG "${CMAKE_LINKER_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=address,undefined,leak")
 
+
+
+
 target_include_directories(mavlink-serial-bridge PUBLIC ${YAML_INCLUDE_DIRS} ${PROJECT_BINARY_DIR} ${PROJECT_SOURCE_DIR}/lib/c-ringbuf)
-target_link_libraries(mavlink-serial-bridge ${YAML_LIBRARIES})
+# target_link_libraries(mavlink-serial-bridge ${CMAKE_CURRENT_SOURCE_DIR}/libcyaml.a ${CMAKE_CURRENT_SOURCE_DIR}/libyaml.a)
 
 configure_file("${PROJECT_SOURCE_DIR}/mavlink-serial-bridge@.service.cmake"
     "${PROJECT_BINARY_DIR}/mavlink-serial-bridge@.service")
