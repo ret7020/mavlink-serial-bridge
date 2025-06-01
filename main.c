@@ -481,6 +481,21 @@ int main(int argc, char **argv)
   socklen_t addr_len;
 
   syslog(LOG_INFO, "Main loop started");
+
+  // Send initial hearbeat to enable mavlink
+
+  // 
+
+  mavlink_message_t msg;
+  mavlink_msg_heartbeat_pack(1, 0, &msg, MAV_TYPE_QUADROTOR, MAV_AUTOPILOT_PX4,
+                               MAV_MODE_AUTO_ARMED, 0, MAV_STATE_ACTIVE);
+
+  uint8_t buffer[MAVLINK_MAX_PACKET_LEN];
+  uint16_t len = mavlink_msg_to_send_buffer(buffer, &msg);
+  printf("HeartBeat sent\n");
+  write(serial_fd, buffer, len);
+
+
   while (!stop_application)
   {
     
