@@ -1,3 +1,7 @@
+/*
+Usage example: ./mavlink-serial-bridge /dev/ttyACM0 2000000 192.168.1.33
+*/
+
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -92,6 +96,11 @@ speed_t baudrate2speed_t(const unsigned int baudrate)
 int main(int argc, char **argv)
 {
   printf("MAVLink serial to UDP bridge v%u.%u\n", VERSION_MAJOR, VERSION_MINOR);
+  // printf("%s\n", argv[0]);
+  if (argc < 3){
+    printf("Usage: mavlink-serial-bridge <DEVICE> <BAUD> <QGC IP>");
+    return 0;
+  }
 
   // Signal action structure
   struct sigaction act;
@@ -109,66 +118,24 @@ int main(int argc, char **argv)
 
   setlogmask(LOG_UPTO(LOG_INFO));
 
-  int option;
-  // For every command line argument
-  while ((option = getopt(argc, argv, "dhef:")) != -1)
-    switch (option)
-    {
-    // Debug output
-    case 'd':
-      setlogmask(LOG_UPTO(LOG_DEBUG));
-      break;
-    // Dulicate log to stderr
-    case 'e':
-      log_stderr = true;
-      break;
-    // Help request
-    case 'h':
-    // Help request
-    case '?':
-      puts(
-        "\nUsage:\n\tmavlink-serial-bridge [-d] [-e] <app_config>\n\t\t"
-        "Options:\n\t"
-        "-d - print debug output,\n\t"
-        "-e - duplicate data from syslog to stderr,\n\t"
-        "-h - print this help."
-      );
-      return EX_USAGE;
-      break;
-    default:
-      return EX_USAGE;
-    }
-
   // Config file path command line argument value
   char *config_path = NULL;
 
-  // Configuration file path (last position argument)
-  if (optind < argc)
-    config_path = argv[optind];
-  else
-  {
-    printf("\nConfiguration file path is not set!\n");
-    return EX_USAGE;
-  }
 
   openlog("mavlink-serial-bridge",
     LOG_CONS | LOG_PID | LOG_NDELAY | ((log_stderr) ? LOG_PERROR : 0), LOG_USER);
   
   syslog(LOG_DEBUG, "Debug mode enabled");
 
-  syslog(LOG_INFO, "Loading configuration from \"%s\"...", config_path);
 
-  const struct config *app_config = config_load(config_path);
-  if (!app_config)
-  {
-    syslog(LOG_ERR, "Failed to load configuration file");
-    return EX_USAGE;
-  }
+  
+  const struct config *app_config;
+  
+
 
   syslog(LOG_DEBUG, "Preparing serial port TX ring buffer...");
 
-  unsigned int serial_tx_buffer_cap = (app_config->serial.tx_buffer_capacity) ?
-    *app_config->serial.tx_buffer_capacity : SERIAL_TX_RINGBUF_CAP_DEF;
+  unsigned int serial_tx_buffer_cap = SERIAL_TX_RINGBUF_CAP_DEF;
   syslog(LOG_INFO, "Serial port TX ring buffer capacity: %u", serial_tx_buffer_cap);
 
   if (serial_tx_buffer_cap < SERIAL_TX_RINGBUF_CAP_MIN)
@@ -196,9 +163,9 @@ int main(int argc, char **argv)
 
   syslog(LOG_INFO, "Opening serial port...");
 
-  syslog(LOG_INFO, "Serial port device file: %s", app_config->serial.device);
+  syslog(LOG_INFO, "Serial port device file: %s", argv[1]);
   // Open FC serial port
-  int serial_fd = open(app_config->serial.device, O_RDWR | O_NONBLOCK | O_NOCTTY);
+  int serial_fd = open(argv[1], O_RDWR | O_NONBLOCK | O_NOCTTY);
   if (serial_fd == -1)
   {
     syslog(LOG_ERR, "Error opening serial port: %s", strerror(errno));
@@ -224,8 +191,7 @@ int main(int argc, char **argv)
     return EX_OSERR;
   }
 
-  unsigned int serial_baud_int = (app_config->serial.baudrate) ?
-    *app_config->serial.baudrate : SERIAL_BAUD_DEF;
+  unsigned int serial_baud_int = atoi(argv[2]); //2000000;
   syslog(LOG_INFO, "Serial port baudrate: %u", serial_baud_int);
 
   speed_t serial_baud = baudrate2speed_t(serial_baud_int);
@@ -260,22 +226,23 @@ int main(int argc, char **argv)
   /* never send SIGTTOU*/
   serial_tty.c_lflag &= ~(TOSTOP);
 
-  if (!app_config->serial.flow || (*app_config->serial.flow == SFC_NONE))
-    /* disable flow control */
-    serial_tty.c_cflag &= ~(CRTSCTS);
-  else if (*app_config->serial.flow == SFC_HARDWARE)
-    /* enable flow control */
-    serial_tty.c_cflag |= CRTSCTS;
-  else
-  {
-    syslog(LOG_ERR, "Invalid serial port flow control");
+  // if (!app_config->serial.flow || (*app_config->serial.flow == SFC_NONE))
+  //   /* disable flow control */
+  //   serial_tty.c_cflag &= ~(CRTSCTS);
+  // else if (*app_config->serial.flow == SFC_HARDWARE)
+  //   /* enable flow control */
+  //   serial_tty.c_cflag |= CRTSCTS;
+  // else
+  // {
+  //   syslog(LOG_ERR, "Invalid serial port flow control");
 
-    config_free(app_config);
-    ringbuf_free(&serial_buffer_tx);
-    close(serial_fd);
+  //   config_free(app_config);
+  //   ringbuf_free(&serial_buffer_tx);
+  //   close(serial_fd);
 
-    return EX_USAGE;
-  }
+  //   return EX_USAGE;
+  // }
+  // serial_tty.c_cflag &= ~(CRTSCTS);
   syslog(LOG_INFO, "Serial hardware flow control: %s", (serial_tty.c_cflag & CRTSCTS) ?
     "Enabled" : "Disabled");
 
@@ -340,12 +307,12 @@ int main(int argc, char **argv)
   memset(&local_addr, 0, sizeof(local_addr));
 
   local_addr.sin_family = AF_INET;
-  if (app_config->udp.local && app_config->udp.local->ip)
+  if (1)
   {
     // Convert string to the IP address
-    if (!inet_aton(app_config->udp.local->ip, &local_addr.sin_addr))
+    if (!inet_aton("0.0.0.0", &local_addr.sin_addr))
     {
-      syslog(LOG_ERR, "Invalid local IP address: \"%s\"", app_config->udp.local->ip);
+      syslog(LOG_ERR, "Invalid local IP address: \"%s\"", "0.0.0.0");
 
       config_free(app_config);
       ringbuf_free(&serial_buffer_tx);
@@ -355,7 +322,7 @@ int main(int argc, char **argv)
       return EX_USAGE;
     }
 
-    syslog(LOG_INFO, "UDP local interface: %s", app_config->udp.local->ip);
+    syslog(LOG_INFO, "UDP local interface: %s", "0.0.0.0");
   }
   else
   {
@@ -364,8 +331,7 @@ int main(int argc, char **argv)
     syslog(LOG_INFO, "UDP local interface: All");
   }
 
-  uint16_t udp_local_port = (app_config->udp.local) && (app_config->udp.local->port) ?
-    *app_config->udp.local->port : UDP_LOCAL_PORT_DEF;
+  uint16_t udp_local_port = 6666;
   if (udp_local_port)
     syslog(LOG_INFO, "UDP local port: %u", udp_local_port);
   else
@@ -393,17 +359,17 @@ int main(int argc, char **argv)
   struct sockaddr_in remote_addr;
   memset(&remote_addr, 0, sizeof(remote_addr));
 
-  if (app_config->udp.remote)
+  if (1)
   {
     struct addrinfo *res = 0;
 
-    syslog(LOG_INFO, "UDP remote host: %s:%u", app_config->udp.remote->ip, app_config->udp.remote->port);
+    syslog(LOG_INFO, "UDP remote host: %s:%u", argv[3], 14555);
 
     remote_addr.sin_family = AF_INET;
     // Convert IP from the string to the binary format
-    if (!inet_aton(app_config->udp.remote->ip, &remote_addr.sin_addr))
+    if (!inet_aton(argv[3], &remote_addr.sin_addr))
     {
-      syslog(LOG_ERR, "Invalid remote IP address: \"%s\"", app_config->udp.remote->ip);
+      syslog(LOG_ERR, "Invalid remote IP address: \"%s\"", 14555);
 
       config_free(app_config);
       ringbuf_free(&serial_buffer_tx);
@@ -412,9 +378,9 @@ int main(int argc, char **argv)
 
       return EX_USAGE;
     }
-    remote_addr.sin_port = htons(app_config->udp.remote->port);
+    remote_addr.sin_port = htons(14555);
 
-    if (app_config->udp.remote->broadcast && *app_config->udp.remote->broadcast)
+    if (1)
     {
       // Const true value for a SO_BROADCAST option
       int so_broadcast = true;
@@ -437,7 +403,7 @@ int main(int argc, char **argv)
     else
       syslog(LOG_INFO, "UDP broadcast: Disabled");
 
-    remote_lock = app_config->udp.remote->lock && *app_config->udp.remote->lock;
+    remote_lock = 0;
   }
   else
     syslog(LOG_INFO, "UDP remote host: Not set (listening)");
@@ -517,6 +483,7 @@ int main(int argc, char **argv)
   syslog(LOG_INFO, "Main loop started");
   while (!stop_application)
   {
+    
     // Reset fd set (select modifies this set to return the answer)
     FD_ZERO(&read_fds);
     // Set serial port fd
@@ -531,6 +498,7 @@ int main(int argc, char **argv)
 
     // Wait for data at any fd and process SIGINT and SIGTERM
     select_fds_num = pselect(fd_max + 1, &read_fds, &write_fds, NULL, NULL, &orig_mask);
+    
     // select returned an error
     if (select_fds_num < 0)
     {
@@ -543,6 +511,7 @@ int main(int argc, char **argv)
     // New data from the serial port
     if (FD_ISSET(serial_fd, &read_fds))
     {
+      
       // Read data
       data_read = read(serial_fd, &read_buf, sizeof(read_buf));
 
