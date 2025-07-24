@@ -367,7 +367,7 @@ int main(int argc, char **argv)
   }
 
   // Lock remote host (not change on the incoming packet)
-  bool remote_lock = true;
+  bool remote_lock = false;
 
   // Remote address
   struct sockaddr_in remote_addr;
@@ -417,7 +417,7 @@ int main(int argc, char **argv)
     else
       syslog(LOG_INFO, "UDP broadcast: Disabled");
 
-    remote_lock = 1;
+    remote_lock = 0;
   }
   else
     syslog(LOG_INFO, "UDP remote host: Not set (listening)");
@@ -607,11 +607,11 @@ int main(int argc, char **argv)
       else
       {
         // Save the address struct length
-        addr_len = sizeof(struct sockaddr_in);
-        // Recieve a UDP message and save the sender's address
-        data_read = recvfrom(udp_socket_fd, &read_buf, sizeof(read_buf), 0, (struct sockaddr *)&remote_addr,
-          &addr_len);
-        assert(addr_len == sizeof(struct sockaddr_in));
+        struct sockaddr_in sender;
+        socklen_t addr_len = sizeof(sender);
+
+        data_read = recvfrom(udp_socket_fd, &read_buf, sizeof(read_buf), 0,
+                            (struct sockaddr *)&sender, &addr_len);
       }
 
       // No need to parse MAVLink message - just write data directly
