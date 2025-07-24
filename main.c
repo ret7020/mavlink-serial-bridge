@@ -30,6 +30,9 @@ extern char *optarg;
 extern int optind, opterr, optopt;
 //
 
+#define MAX_CLIENTS 2
+struct sockaddr_in clients[MAX_CLIENTS];
+
 // Volatile flag to stop application (from signal)
 static volatile sig_atomic_t stop_application = false;
 
@@ -75,6 +78,8 @@ speed_t baudrate2speed_t(const unsigned int baudrate)
       return B230400;
     case 460800:
       return B460800;
+    case 500000:
+      return B500000;
     case 921600:
       return B921600;
     case 2000000:
@@ -339,6 +344,15 @@ int main(int argc, char **argv)
 
   local_addr.sin_port = htons(udp_local_port);
 
+  int opt = 1;
+  if (setsockopt(udp_socket_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
+      syslog(LOG_ERR, "setsockopt(SO_REUSEADDR) failed: %s", strerror(errno));
+  }
+
+  if (setsockopt(udp_socket_fd, SOL_SOCKET, SO_REUSEPORT, &opt, sizeof(opt)) < 0) {
+      syslog(LOG_ERR, "setsockopt(SO_REUSEPORT) failed: %s", strerror(errno));
+  }
+
   // Bind UDP socket to local address
   if (bind(udp_socket_fd, (struct sockaddr *)&local_addr, sizeof(local_addr)) == -1)
   {
@@ -353,7 +367,7 @@ int main(int argc, char **argv)
   }
 
   // Lock remote host (not change on the incoming packet)
-  bool remote_lock = false;
+  bool remote_lock = true;
 
   // Remote address
   struct sockaddr_in remote_addr;
@@ -403,7 +417,7 @@ int main(int argc, char **argv)
     else
       syslog(LOG_INFO, "UDP broadcast: Disabled");
 
-    remote_lock = 0;
+    remote_lock = 1;
   }
   else
     syslog(LOG_INFO, "UDP remote host: Not set (listening)");
@@ -495,6 +509,12 @@ int main(int argc, char **argv)
   printf("HeartBeat sent\n");
   write(serial_fd, buffer, len);
 
+  struct sockaddr_in local_client;
+  memset(&local_client, 0, sizeof(local_client));
+  local_client.sin_family = AF_INET;
+  local_client.sin_port = htons(14557);
+  inet_aton("127.0.0.1", &local_client.sin_addr);
+
 
   while (!stop_application)
   {
@@ -563,6 +583,10 @@ int main(int argc, char **argv)
 
             return EX_SOFTWARE;
           }
+
+          // Local client
+          sendto(udp_socket_fd, send_buf, message_length, 0,
+                (struct sockaddr *)&local_client, sizeof(local_client));
 
           // Ignore data if the remote address is unknown at this moment
           if (remote_addr.sin_port)
